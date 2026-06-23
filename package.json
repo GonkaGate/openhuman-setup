@@ -1,7 +1,7 @@
 {
   "name": "@gonkagate/openhuman-setup",
   "version": "0.1.0",
-  "description": "Onboarding CLI for configuring OpenHuman to use GonkaGate as an OpenAI-compatible provider.",
+  "description": "Configure OpenHuman to use GonkaGate as an OpenAI-compatible inference provider.",
   "homepage": "https://github.com/GonkaGate/openhuman-setup#readme",
   "bugs": {
     "url": "https://github.com/GonkaGate/openhuman-setup/issues"
