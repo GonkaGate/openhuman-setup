@@ -1,0 +1,63 @@
+{
+  "name": "@gonkagate/openhuman-setup",
+  "version": "0.1.0",
+  "description": "Onboarding CLI for configuring OpenHuman to use GonkaGate as an OpenAI-compatible provider.",
+  "homepage": "https://github.com/GonkaGate/openhuman-setup#readme",
+  "bugs": {
+    "url": "https://github.com/GonkaGate/openhuman-setup/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GonkaGate/openhuman-setup.git"
+  },
+  "type": "module",
+  "bin": {
+    "openhuman-setup": "bin/gonkagate-openhuman.js",
+    "gonkagate-openhuman": "bin/gonkagate-openhuman.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "ci": "npm run typecheck && npm run test && npm run format:check && npm run package:check",
+    "dev": "tsx src/cli.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "package:check": "publint",
+    "prepack": "npm run ci",
+    "test": "npm run build && node scripts/run-tests.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "keywords": [
+    "gonkagate",
+    "openhuman",
+    "installer",
+    "cli",
+    "custom provider",
+    "openai compatible"
+  ],
+  "license": "Apache-2.0",
+  "packageManager": "npm@11.11.1",
+  "dependencies": {
+    "@inquirer/prompts": "^8.3.2",
+    "commander": "^14.0.3",
+    "smol-toml": "^1.4.2",
+    "write-file-atomic": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.1",
+    "prettier": "^3.6.2",
+    "publint": "^0.3.15",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
