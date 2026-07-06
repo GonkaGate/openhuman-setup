@@ -45,11 +45,11 @@ label = "GonkaGate"
 endpoint = "https://api.gonkagate.com/v1"
 auth_style = "bearer"
 
-chat_provider = "gonkagate:qwen/qwen3-235b-a22b-instruct-2507-fp8"
-reasoning_provider = "gonkagate:moonshotai/kimi-k2.6"
-agentic_provider = "gonkagate:moonshotai/kimi-k2.6"
-coding_provider = "gonkagate:moonshotai/kimi-k2.6"
-memory_provider = "gonkagate:qwen/qwen3-235b-a22b-instruct-2507-fp8"
+chat_provider = "gonkagate:<live-model-id>"
+reasoning_provider = "gonkagate:<live-model-id>"
+agentic_provider = "gonkagate:<live-model-id>"
+coding_provider = "gonkagate:<live-model-id>"
+memory_provider = "gonkagate:<live-model-id>"
 ```
 
 The matching credential key is:
@@ -104,6 +104,7 @@ provider:gonkagate / default
 ## Implementation Consequences
 
 - Use `cloud_providers` and workload provider fields as the main write path.
+- Fetch concrete GonkaGate model IDs from authenticated `/v1/models`.
 - Do not write `api_url = "https://api.gonkagate.com/v1"` for v1. That is the
   old direct-provider mental model and risks confusing backend API resolution.
 - Do not rely on `model_routes` as the primary tier-routing mechanism.

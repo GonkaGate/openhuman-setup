@@ -26,9 +26,9 @@ GonkaGate configured as a native OpenAI-compatible custom provider without
 hand-editing OpenHuman TOML config.
 
 The CLI writes OpenHuman's native `cloud_providers` shape, routes OpenHuman
-agent workloads to curated GonkaGate model IDs, preserves unrelated config,
-creates a timestamped backup before replacing an existing config file, and
-verifies the written result.
+agent workloads to live GonkaGate model IDs from `/v1/models`, preserves
+unrelated config, creates a timestamped backup before replacing an existing
+config file, and verifies the written result.
 
 Current OpenHuman credential storage is not a safe standalone JSON write target.
 OpenHuman may store provider secrets in the OS keychain or encrypted JSON
@@ -54,13 +54,16 @@ You need:
 - Detects the effective OpenHuman `config.toml`, including
   `OPENHUMAN_WORKSPACE`, active user, legacy active workspace, staging root, and
   pre-login local config.
+- Fetches `GET https://api.gonkagate.com/v1/models` with the user's GonkaGate
+  API key and treats that response as the model source of truth.
 - Adds one GonkaGate `cloud_providers` entry with slug `gonkagate`.
 - Writes workload provider strings for chat, reasoning, agentic, coding, and
   memory/summarization paths.
 - Preserves unrelated TOML values and unrelated cloud providers.
 - Creates one timestamped backup before replacing an existing config file.
 - Verifies the local config shape after writing.
-- Runs a direct GonkaGate `/v1/chat/completions` smoke when a key is available.
+- Runs a direct GonkaGate `/v1/chat/completions` smoke with the selected live
+  model.
 - Reports OpenHuman sign-in and credential state separately.
 
 ## Target OpenHuman Contract
@@ -72,8 +75,7 @@ You need:
 - OpenHuman provider shape: `cloud_providers` entry plus workload provider
   strings
 - OpenHuman credential key: `provider:gonkagate`, profile `default`
-- Recommended model: `moonshotai/kimi-k2.6`
-- Additional validated model: `qwen/qwen3-235b-a22b-instruct-2507-fp8`
+- Model catalog: authenticated `GET /v1/models` with the user's API key
 
 ## Safe Secret Handling
 
@@ -104,19 +106,16 @@ printf '%s' "$GONKAGATE_API_KEY" | npx @gonkagate/openhuman-setup --api-key-stdi
 
 ## Model Overrides
 
-Defaults:
-
-- reasoning, agentic, coding: `gonkagate:moonshotai/kimi-k2.6`
-- chat, memory/summarization: `gonkagate:qwen/qwen3-235b-a22b-instruct-2507-fp8`
-
-Use curated model keys only:
+By default, the CLI uses the first model returned by GonkaGate `/v1/models` for
+all OpenHuman workloads. Override values must be IDs returned by that live
+response:
 
 ```bash
 npx @gonkagate/openhuman-setup \
-  --reasoning-model kimi-k2.6 \
-  --agentic-model kimi-k2.6 \
-  --coding-model kimi-k2.6 \
-  --summarization-model qwen3-235b-a22b-instruct-2507-fp8
+  --reasoning-model provider/model-id \
+  --agentic-model provider/model-id \
+  --coding-model provider/model-id \
+  --summarization-model provider/model-id
 ```
 
 ## What This Tool Does Not Do
@@ -124,7 +123,7 @@ npx @gonkagate/openhuman-setup \
 - It does not install OpenHuman.
 - It does not write the old `api_url` + `api_key` + `model_routes` setup shape.
 - It does not accept arbitrary custom base URLs.
-- It does not accept arbitrary raw model IDs.
+- It does not use repository-hardcoded GonkaGate model catalogs.
 - It does not print or persist `gp-...` secrets outside approved OpenHuman
   credential handling.
 - It does not directly mutate OpenHuman `auth-profiles.json`.
@@ -148,7 +147,7 @@ The CLI can be exercised against a temporary OpenHuman workspace with:
 
 ```bash
 npm run build
-OPENHUMAN_WORKSPACE="$(mktemp -d)" node bin/gonkagate-openhuman.js --json --yes
+GONKAGATE_API_KEY=gp-... OPENHUMAN_WORKSPACE="$(mktemp -d)" node bin/gonkagate-openhuman.js --json --yes
 ```
 
 The product requirements for the implementation live in

@@ -12,8 +12,8 @@ const tasks = await readFile("docs/specs/openhuman-setup-prd/tasks.md", "utf8");
 
 assert.match(readme, /@gonkagate\/openhuman-setup/);
 assert.match(readme, /https:\/\/api\.gonkagate\.com\/v1/);
-assert.match(readme, /moonshotai\/kimi-k2\.6/);
-assert.match(readme, /qwen\/qwen3-235b-a22b-instruct-2507-fp8/);
+assert.match(readme, /\/v1\/models/);
+assert.doesNotMatch(readme, /curated GonkaGate model IDs/);
 assert.match(security, /GONKAGATE_API_KEY/);
 assert.match(security, /--api-key-stdin/);
 assert.match(security, /must not accept a plain `--api-key` flag/);
@@ -22,6 +22,7 @@ assert.match(readme, /docs\/specs\/openhuman-setup-prd\/spec\.md/);
 assert.match(prd, /cloud_providers/);
 assert.match(prd, /provider:gonkagate/);
 assert.match(prd, /chat_provider/);
+assert.match(prd, /\/v1\/models/);
 for (const tier of [
   "reasoning-v1",
   "agentic-v1",
@@ -30,10 +31,9 @@ for (const tier of [
 ]) {
   assert.match(prd, new RegExp(tier));
 }
-assert.match(prd, /moonshotai\/kimi-k2\.6/);
-assert.match(prd, /qwen\/qwen3-235b-a22b-instruct-2507-fp8/);
-assert.match(prd, /--reasoning-model <key>/);
-assert.match(prd, /--summarization-model <key>/);
+assert.match(prd, /--reasoning-model <id>/);
+assert.match(prd, /--summarization-model <id>/);
+assert.doesNotMatch(prd, /Curated Model Catalog/);
 assert.match(prd, /Setup success must not mean only "file write completed."/);
 assert.match(prd, /credential-store boundary/);
 assert.match(releaseProof, /Automated Proof/);
