@@ -1,33 +1,9 @@
-import { GONKAGATE_PROVIDER_ID } from "./gateway.js";
+import { GONKAGATE_MODELS_URL, GONKAGATE_PROVIDER_ID } from "./gateway.js";
+import { redactSecrets } from "../util/redact.js";
 
-export interface CuratedModelDefinition {
-  displayName: string;
-  modelId: string;
-  recommended: boolean;
-  validationStatus: "validated";
-}
-
-export type CuratedModelRegistry = Record<string, CuratedModelDefinition>;
-
-export const CURATED_MODEL_REGISTRY = Object.freeze({
-  "qwen3-235b-a22b-instruct-2507-fp8": {
-    displayName: "Qwen3 235B A22B Instruct 2507 FP8",
-    modelId: "qwen/qwen3-235b-a22b-instruct-2507-fp8",
-    recommended: false,
-    validationStatus: "validated",
-  },
-  "kimi-k2.6": {
-    displayName: "Kimi K2.6",
-    modelId: "moonshotai/kimi-k2.6",
-    recommended: true,
-    validationStatus: "validated",
-  },
-} as const satisfies CuratedModelRegistry);
-
-export type CuratedModelKey = keyof typeof CURATED_MODEL_REGISTRY;
-
-export interface CuratedModelRecord extends CuratedModelDefinition {
-  key: CuratedModelKey;
+export interface GonkaGateModel {
+  id: string;
+  name?: string;
 }
 
 export type WorkloadId = "chat" | "reasoning" | "agentic" | "coding" | "memory";
@@ -52,50 +28,6 @@ export interface ModelSelectionInput {
   summarizationModelKey?: string;
 }
 
-const recommendedGeneralModel = "moonshotai/kimi-k2.6";
-const recommendedFastModel = "qwen/qwen3-235b-a22b-instruct-2507-fp8";
-
-export const DEFAULT_OPENHUMAN_WORKLOAD_PROVIDERS = Object.freeze([
-  {
-    configField: "chat_provider",
-    model: recommendedFastModel,
-    providerString: `${GONKAGATE_PROVIDER_ID}:${recommendedFastModel}`,
-    workload: "chat",
-  },
-  {
-    configField: "reasoning_provider",
-    model: recommendedGeneralModel,
-    providerString: `${GONKAGATE_PROVIDER_ID}:${recommendedGeneralModel}`,
-    workload: "reasoning",
-  },
-  {
-    configField: "agentic_provider",
-    model: recommendedGeneralModel,
-    providerString: `${GONKAGATE_PROVIDER_ID}:${recommendedGeneralModel}`,
-    workload: "agentic",
-  },
-  {
-    configField: "coding_provider",
-    model: recommendedGeneralModel,
-    providerString: `${GONKAGATE_PROVIDER_ID}:${recommendedGeneralModel}`,
-    workload: "coding",
-  },
-  {
-    configField: "memory_provider",
-    model: recommendedFastModel,
-    providerString: `${GONKAGATE_PROVIDER_ID}:${recommendedFastModel}`,
-    workload: "memory",
-  },
-] as const satisfies readonly WorkloadProvider[]);
-
-const defaultModelKeys = {
-  agentic: "kimi-k2.6",
-  chat: "qwen3-235b-a22b-instruct-2507-fp8",
-  coding: "kimi-k2.6",
-  memory: "qwen3-235b-a22b-instruct-2507-fp8",
-  reasoning: "kimi-k2.6",
-} as const satisfies Record<WorkloadId, CuratedModelKey>;
-
 const workloadFields = {
   agentic: "agentic_provider",
   chat: "chat_provider",
@@ -112,66 +44,121 @@ const workloadOrder = [
   "memory",
 ] as const satisfies readonly WorkloadId[];
 
-export function getValidatedModelKeys(): CuratedModelKey[] {
-  return Object.keys(CURATED_MODEL_REGISTRY) as CuratedModelKey[];
-}
+export async function fetchGonkaGateModels(
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<GonkaGateModel[]> {
+  const response = await fetchImpl(GONKAGATE_MODELS_URL, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    method: "GET",
+    signal: AbortSignal.timeout(20_000),
+  });
 
-export function getCuratedModelByKey(
-  key: string | undefined,
-): CuratedModelRecord | undefined {
-  if (key === undefined || !(key in CURATED_MODEL_REGISTRY)) {
-    return undefined;
+  if (!response.ok) {
+    const body = redactSecrets((await response.text()).slice(0, 500));
+    const detail = body.length === 0 ? response.statusText : body;
+    throw new Error(
+      `Failed to fetch GonkaGate models (${response.status}): ${detail}`,
+    );
   }
 
-  const modelKey = key as CuratedModelKey;
-  return {
-    ...CURATED_MODEL_REGISTRY[modelKey],
-    key: modelKey,
-  };
-}
-
-export function getRecommendedValidatedModel(
-  requestedKey?: string,
-): CuratedModelRecord {
-  const requested = getCuratedModelByKey(requestedKey);
-  if (requested !== undefined) {
-    return requested;
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `GonkaGate models response was not valid JSON: ${redactSecrets(message)}`,
+    );
   }
 
-  for (const key of getValidatedModelKeys()) {
-    const model = CURATED_MODEL_REGISTRY[key];
-    if (model.recommended) {
-      return {
-        ...model,
-        key,
-      };
+  return parseGonkaGateModels(payload);
+}
+
+export function parseGonkaGateModels(payload: unknown): GonkaGateModel[] {
+  if (!isRecord(payload) || !Array.isArray(payload.data)) {
+    throw new Error("GonkaGate models response was invalid.");
+  }
+
+  const seen = new Set<string>();
+  const models: GonkaGateModel[] = [];
+
+  for (const item of payload.data) {
+    if (!isRecord(item) || typeof item.id !== "string") {
+      throw new Error("GonkaGate models response contained an invalid model.");
     }
+
+    const id = item.id.trim();
+    if (id.length === 0) {
+      throw new Error("GonkaGate models response contained an empty model id.");
+    }
+
+    if (seen.has(id)) {
+      continue;
+    }
+
+    seen.add(id);
+    const name =
+      typeof item.name === "string" && item.name.trim().length > 0
+        ? item.name.trim()
+        : undefined;
+    const model: GonkaGateModel = { id };
+    if (name !== undefined) {
+      model.name = name;
+    }
+    models.push(model);
   }
 
-  throw new Error("No recommended validated GonkaGate model is configured.");
+  if (models.length === 0) {
+    throw new Error("GonkaGate models response did not include any models.");
+  }
+
+  return models;
+}
+
+export function getDefaultGonkaGateModel(
+  models: readonly GonkaGateModel[],
+  requestedId?: string,
+): GonkaGateModel {
+  if (requestedId !== undefined) {
+    return getRequiredGonkaGateModel(models, requestedId);
+  }
+
+  const model = models[0];
+  if (model === undefined) {
+    throw new Error("GonkaGate models response did not include any models.");
+  }
+  return model;
 }
 
 export function resolveOpenHumanWorkloadProviders(
   input: ModelSelectionInput = {},
+  models: readonly GonkaGateModel[],
 ): WorkloadProvider[] {
-  const keyFor = (workload: WorkloadId): string | undefined => {
+  const defaultModel = getDefaultGonkaGateModel(
+    models,
+    input.globalModelKey,
+  ).id;
+  const idFor = (workload: WorkloadId): string => {
     switch (workload) {
       case "agentic":
-        return input.agenticModelKey ?? input.globalModelKey;
+        return input.agenticModelKey ?? defaultModel;
       case "coding":
-        return input.codingModelKey ?? input.globalModelKey;
+        return input.codingModelKey ?? defaultModel;
       case "memory":
-        return input.summarizationModelKey ?? input.globalModelKey;
+        return input.summarizationModelKey ?? defaultModel;
       case "reasoning":
-        return input.reasoningModelKey ?? input.globalModelKey;
+        return input.reasoningModelKey ?? defaultModel;
       case "chat":
-        return input.globalModelKey;
+        return defaultModel;
     }
   };
 
   return workloadOrder.map((workload) => {
-    const key = keyFor(workload) ?? defaultModelKeys[workload];
-    const model = getRequiredCuratedModel(key).modelId;
+    const model = getRequiredGonkaGateModel(models, idFor(workload)).id;
     return {
       configField: workloadFields[workload],
       model,
@@ -181,13 +168,22 @@ export function resolveOpenHumanWorkloadProviders(
   });
 }
 
-function getRequiredCuratedModel(key: string): CuratedModelRecord {
-  const model = getCuratedModelByKey(key);
+function getRequiredGonkaGateModel(
+  models: readonly GonkaGateModel[],
+  id: string,
+): GonkaGateModel {
+  const model = models.find((candidate) => candidate.id === id);
   if (model !== undefined) {
     return model;
   }
 
   throw new Error(
-    `Unknown GonkaGate model key. Valid choices: ${getValidatedModelKeys().join(", ")}`,
+    `Unknown GonkaGate model id. Valid choices: ${models
+      .map((candidate) => candidate.id)
+      .join(", ")}`,
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

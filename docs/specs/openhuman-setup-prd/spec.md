@@ -64,15 +64,16 @@ tool-heavy work, coding, and summarization.
 - Preserve unrelated OpenHuman configuration.
 - Collect the GonkaGate API key through safe inputs only.
 - Let users select a GonkaGate model for each OpenHuman workload covered by v1.
-- Provide recommended defaults that make `--yes` and non-interactive setup
+- Provide live-catalog defaults that make `--yes` and non-interactive setup
   practical.
 - Verify that the resulting setup is effective before reporting success.
-- Keep future model catalog changes centralized in the setup utility.
+- Let future GonkaGate model catalog changes ship through `/v1/models`, without
+  repository changes.
 
 ## Non-Goals
 
 - Do not implement arbitrary custom base URLs in v1.
-- Do not expose arbitrary non-curated model ids in v1.
+- Do not use repository-hardcoded GonkaGate model catalogs in v1.
 - Do not mutate shell profiles or generate `.env` files.
 - Do not install or upgrade OpenHuman itself in v1.
 - Do not patch the OpenHuman binary at runtime.
@@ -84,7 +85,7 @@ tool-heavy work, coding, and summarization.
 ### First-Time OpenHuman User
 
 Wants OpenHuman to work with GonkaGate quickly and safely. They should be able
-to accept recommended defaults and return to OpenHuman.
+to accept live-catalog defaults and return to OpenHuman.
 
 ### Agent Power User
 
@@ -100,7 +101,7 @@ exposing secrets in command arguments.
 
 - As a user, I can run `npx @gonkagate/openhuman-setup` and configure OpenHuman
   without editing TOML manually.
-- As a user, I can accept recommended model mappings for all OpenHuman tiers.
+- As a user, I can accept live model mappings for all OpenHuman tiers.
 - As a user, I can pick a different validated GonkaGate model for
   `reasoning-v1`, `agentic-v1`, `coding-v1`, and `summarization-v1`.
 - As a user, I can run non-interactively with safe defaults.
@@ -115,15 +116,16 @@ exposing secrets in command arguments.
 1. Start CLI.
 2. Detect OpenHuman installation/config context.
 3. Resolve target OpenHuman `config.toml`.
-4. Present or infer the role-model mapping.
-5. Collect GonkaGate API key safely.
-6. Create backups for managed config rewrites.
-7. Merge GonkaGate settings into OpenHuman config.
-8. Verify local config shape.
-9. Store or verify GonkaGate credentials through OpenHuman's provider credential
-   shape.
-10. Verify effective GonkaGate/OpenHuman inference path where possible.
-11. Print next step: return to OpenHuman.
+4. Collect GonkaGate API key safely.
+5. Fetch the live GonkaGate `/v1/models` catalog.
+6. Present or infer the role-model mapping.
+7. Create backups for managed config rewrites.
+8. Merge GonkaGate settings into OpenHuman config.
+9. Verify local config shape.
+10. Store or verify GonkaGate credentials through OpenHuman's provider
+    credential shape.
+11. Verify effective GonkaGate/OpenHuman inference path where possible.
+12. Print next step: return to OpenHuman.
 
 ## OpenHuman Config Discovery
 
@@ -153,24 +155,22 @@ Compatibility gate: OpenHuman currently switches to a custom OpenAI-compatible
 LLM provider through slug-keyed `cloud_providers` entries and workload provider
 strings. v1 must write GonkaGate as a `cloud_providers` entry with slug
 `gonkagate` and must route selected workloads with provider strings such as
-`gonkagate:moonshotai/kimi-k2.6`.
+`gonkagate:<live-model-id>`.
 
 The previous `api_url` + `api_key` direct-inference path is legacy fallback only
 and is out of scope for the primary v1 implementation.
 
-## Curated Model Catalog
+## Live Model Catalog
 
-The v1 curated model catalog includes:
+The runtime model catalog source of truth is authenticated
+`GET https://api.gonkagate.com/v1/models` with the user's GonkaGate API key. The
+setup utility parses the OpenAI-compatible response shape
+`{ data: [{ id: string, name?: string }] }`, deduplicates model IDs, and rejects
+empty or invalid responses.
 
-| Key                                 | Model id                                 | Default use                            |
-| ----------------------------------- | ---------------------------------------- | -------------------------------------- |
-| `kimi-k2.6`                         | `moonshotai/kimi-k2.6`                   | Recommended general default            |
-| `qwen3-235b-a22b-instruct-2507-fp8` | `qwen/qwen3-235b-a22b-instruct-2507-fp8` | Recommended fast/summarization default |
-
-The catalog must stay centralized in code and covered by tests/docs. Future
-models can be added when validated against OpenHuman's expected request shape.
-Authenticated live catalog validation is required before release;
-unauthenticated `GET /v1/models` currently returns `401`.
+New or removed GonkaGate network models must not require repository changes.
+`--yes` and non-interactive setup use the first returned live model unless the
+API later exposes a supported default signal.
 
 ## Role Model Selection
 
@@ -180,13 +180,13 @@ strings instead of the old `model_routes`-only path.
 
 ### Role Defaults
 
-| OpenHuman concept  | Config field         | Recommended GonkaGate model              |
-| ------------------ | -------------------- | ---------------------------------------- |
-| `reasoning-v1`     | `reasoning_provider` | `moonshotai/kimi-k2.6`                   |
-| `agentic-v1`       | `agentic_provider`   | `moonshotai/kimi-k2.6`                   |
-| `coding-v1`        | `coding_provider`    | `moonshotai/kimi-k2.6`                   |
-| `summarization-v1` | `memory_provider`    | `qwen/qwen3-235b-a22b-instruct-2507-fp8` |
-| fast/chat path     | `chat_provider`      | `qwen/qwen3-235b-a22b-instruct-2507-fp8` |
+| OpenHuman concept  | Config field         | GonkaGate model source        |
+| ------------------ | -------------------- | ----------------------------- |
+| `reasoning-v1`     | `reasoning_provider` | selected live `/v1/models` id |
+| `agentic-v1`       | `agentic_provider`   | selected live `/v1/models` id |
+| `coding-v1`        | `coding_provider`    | selected live `/v1/models` id |
+| `summarization-v1` | `memory_provider`    | selected live `/v1/models` id |
+| fast/chat path     | `chat_provider`      | selected live `/v1/models` id |
 
 Current OpenHuman source behavior to account for:
 
@@ -201,8 +201,9 @@ Current OpenHuman source behavior to account for:
 
 ### Interactive Behavior
 
-Interactive setup should show a model selection step for each covered workload.
-The default highlighted option is the recommended model for that workload.
+Interactive setup should select from the fetched `/v1/models` IDs for each
+covered workload. The default highlighted option is the first live returned
+model unless the API later exposes a supported default signal.
 
 The UI copy should explain the role briefly:
 
@@ -216,20 +217,20 @@ The user can accept all defaults quickly or customize individual tiers.
 
 ### Non-Interactive Behavior
 
-`--yes` uses all recommended defaults.
+`--yes` uses the first model returned by the live `/v1/models` catalog.
 
 Future non-interactive flags should allow explicit tier overrides:
 
 ```bash
 npx @gonkagate/openhuman-setup \
-  --reasoning-model kimi-k2.6 \
-  --agentic-model kimi-k2.6 \
-  --coding-model kimi-k2.6 \
-  --summarization-model qwen3-235b-a22b-instruct-2507-fp8
+  --reasoning-model provider/model-id \
+  --agentic-model provider/model-id \
+  --coding-model provider/model-id \
+  --summarization-model provider/model-id
 ```
 
-All model override values must resolve to curated validated model keys. Raw
-provider model ids are out of scope for v1.
+All model override values must resolve to IDs from the fetched `/v1/models`
+response.
 
 ## Config Write Contract
 
@@ -241,11 +242,11 @@ The utility writes the minimum OpenHuman config needed for GonkaGate:
   - `endpoint = "https://api.gonkagate.com/v1"`
   - `auth_style = "bearer"`
 - workload provider strings such as:
-  - `chat_provider = "gonkagate:qwen/qwen3-235b-a22b-instruct-2507-fp8"`
-  - `reasoning_provider = "gonkagate:moonshotai/kimi-k2.6"`
-  - `agentic_provider = "gonkagate:moonshotai/kimi-k2.6"`
-  - `coding_provider = "gonkagate:moonshotai/kimi-k2.6"`
-  - `memory_provider = "gonkagate:qwen/qwen3-235b-a22b-instruct-2507-fp8"`
+  - `chat_provider = "gonkagate:<live-model-id>"`
+  - `reasoning_provider = "gonkagate:<live-model-id>"`
+  - `agentic_provider = "gonkagate:<live-model-id>"`
+  - `coding_provider = "gonkagate:<live-model-id>"`
+  - `memory_provider = "gonkagate:<live-model-id>"`
 - GonkaGate credentials in OpenHuman's provider credential namespace:
   - provider key `provider:gonkagate`
   - profile `default`
@@ -287,7 +288,7 @@ Verification should include:
 - GonkaGate `cloud_providers` entry exists exactly once.
 - API key is present in provider credentials without printing it.
 - Workload routing covers all v1 workloads.
-- Selected models are curated validated GonkaGate models.
+- Selected models come from the authenticated GonkaGate `/v1/models` response.
 - A real GonkaGate `/v1/chat/completions` smoke check passes when credentials
   and network allow it.
 - OpenHuman has an active app session, or the runtime session requirement is
@@ -301,7 +302,7 @@ utility should additionally verify the effective OpenHuman client config.
 Errors must be actionable and non-leaky:
 
 - missing OpenHuman config: explain how config discovery was attempted.
-- invalid model key: show valid curated keys.
+- invalid model id: show valid live IDs from `/v1/models`.
 - unsafe secret flag: tell the user to use hidden prompt, `GONKAGATE_API_KEY`,
   or `--api-key-stdin`.
 - failed smoke check: show sanitized status/body and whether config was written.
@@ -320,24 +321,24 @@ Planned flags:
 - `--yes`
 - `--json`
 - `--api-key-stdin`
-- `--reasoning-model <key>`
-- `--agentic-model <key>`
-- `--coding-model <key>`
-- `--summarization-model <key>`
+- `--reasoning-model <id>`
+- `--agentic-model <id>`
+- `--coding-model <id>`
+- `--summarization-model <id>`
 
 Explicitly unsupported:
 
 - `--api-key`
 - `--base-url`
-- arbitrary raw model ids
+- model ids absent from the live `/v1/models` response
 
 ## Success Metrics
 
 - A new user can complete setup without editing config files.
 - A power user can customize all four tier mappings in one run.
 - Reruns are idempotent and preserve unrelated OpenHuman settings.
-- CI protects package contract, docs contract, curated model catalog, and role
-  defaults.
+- CI protects package contract, docs contract, live model parsing, and role
+  routing.
 - Setup output never leaks the GonkaGate API key.
 
 ## Open Questions
@@ -346,8 +347,7 @@ Explicitly unsupported:
   local RPC when the app is running and fall back to a manual key step?
 - Should `fast-v1` remain a separate CLI flag, or should v1 map it to the
   current OpenHuman `chat_provider` field?
-- Should live model catalog validation require an API key, or should the setup
-  utility ship only the curated catalog until authenticated verification?
+- Should the GonkaGate models API expose a preferred default signal for setup?
 - Should v1 be limited to an OpenHuman version range or commit range until the
   `cloud_providers` and provider credential shape stabilizes further?
 
@@ -357,6 +357,6 @@ Explicitly unsupported:
 - PRD exists at `docs/specs/openhuman-setup-prd/spec.md`.
 - PRD documents the four required OpenHuman tiers.
 - PRD documents user-selectable tier mappings.
-- PRD documents recommended defaults for each tier.
+- PRD documents live-catalog defaults for each tier.
 - PRD documents safe secret inputs and the ban on `--api-key`.
 - PRD documents verification expectations beyond file writes.

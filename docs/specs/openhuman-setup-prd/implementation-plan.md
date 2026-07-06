@@ -28,7 +28,7 @@ Done means:
   workload fields, and `provider:gonkagate` credentials.
 - Do not use the legacy `api_url` + `api_key` + `model_routes` path as the v1
   write target.
-- Do not add arbitrary base URLs or raw model ids.
+- Do not add arbitrary base URLs or model ids absent from live `/v1/models`.
 - Do not install or patch OpenHuman.
 - Do not print, log, or place `gp-...` secrets in argv, output, repository
   files, or backup filenames.

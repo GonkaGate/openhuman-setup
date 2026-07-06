@@ -5,8 +5,9 @@ Date: 2026-06-21
 ## Automated Proof
 
 - `npm run ci` passes.
-- Temp-workspace CLI smoke writes OpenHuman native GonkaGate config:
-  `OPENHUMAN_WORKSPACE=/tmp/openhuman-setup-smoke-codex node bin/gonkagate-openhuman.js --json --yes`.
+- Temp-workspace CLI smoke writes OpenHuman native GonkaGate config with a
+  mocked authenticated `/v1/models` response:
+  `OPENHUMAN_WORKSPACE=/tmp/openhuman-setup-smoke-codex GONKAGATE_API_KEY=gp-... node bin/gonkagate-openhuman.js --json --yes`.
 - The smoke-written config contains one `cloud_providers` entry with slug
   `gonkagate` and workload provider strings for chat, reasoning, agentic,
   coding, and memory.
@@ -17,7 +18,7 @@ Not completed in this environment.
 
 Current blocker:
 
-- `GONKAGATE_API_KEY` is not set.
+- A live `GONKAGATE_API_KEY` is not set.
 - OpenHuman discovery resolves to pre-login config:
   `/Users/daniil/.openhuman/users/local/config.toml`.
 - OpenHuman session inspection reports `missing`.
@@ -35,8 +36,8 @@ and a real GonkaGate key entered through OpenHuman Settings -> AI.
   pre-login `users/local/config.toml`.
 - T2 Pure TOML Merge: fixture tests cover fresh config, unrelated provider
   preservation, GonkaGate replacement, and idempotency.
-- T3 Model Selection: tests cover defaults, global `--model`, per-workload
-  overrides, and curated-key rejection.
+- T3 Model Selection: tests cover live `/v1/models` parsing, first-live-model
+  defaults, global `--model`, per-workload overrides, and live-id rejection.
 - T4 Secret Intake And Redaction: tests cover `GONKAGATE_API_KEY`,
   `--api-key-stdin`, plain `--api-key` rejection, and `gp-...` redaction.
 - T5 Credential Storage: current safe outcome is no direct `auth-profiles.json`

@@ -6,7 +6,9 @@ import {
   verifyGonkaGateConfig,
 } from "../dist/openhuman/toml.js";
 
-const providers = resolveOpenHumanWorkloadProviders();
+const providers = resolveOpenHumanWorkloadProviders({}, [
+  { id: "live/default-model" },
+]);
 
 const fresh = mergeGonkaGateConfig("", providers);
 const freshConfig = parse(fresh);
@@ -16,7 +18,7 @@ assert.equal(
   freshConfig.cloud_providers[0].endpoint,
   "https://api.gonkagate.com/v1",
 );
-assert.equal(freshConfig.reasoning_provider, "gonkagate:moonshotai/kimi-k2.6");
+assert.equal(freshConfig.reasoning_provider, "gonkagate:live/default-model");
 assert.deepEqual(verifyGonkaGateConfig(fresh, providers), []);
 
 const existing = `

@@ -67,15 +67,15 @@ GonkaGate provider replacement, and rerun idempotency.
 
 ### T3 Model Selection
 
-- [ ] Keep model choices limited to the curated catalog.
-- [ ] Keep `--model` as a global curated-model shortcut for the current scaffold
+- [ ] Keep model choices limited to authenticated `/v1/models`.
+- [ ] Keep `--model` as a global live-model shortcut for the current scaffold
       contract.
 - [ ] Implement explicit flags: `--reasoning-model`, `--agentic-model`,
       `--coding-model`, `--summarization-model`.
-- [ ] Reject unknown model keys with valid choices.
+- [ ] Reject unknown model ids with valid live choices.
 
-Proof: tests cover default model selection, per-workload overrides, and invalid
-model rejection.
+Proof: tests cover live catalog parsing, default model selection, per-workload
+overrides, and invalid model rejection.
 
 ### T4 Secret Intake And Redaction
 
@@ -152,7 +152,7 @@ Stop and report evidence instead of guessing if:
 - current OpenHuman no longer uses the documented `cloud_providers` shape;
 - credential-store writes cannot be proven safe;
 - `smol-toml` cannot preserve the required semantics;
-- GonkaGate rejects both curated default models during authenticated smoke;
+- GonkaGate rejects the selected live model during authenticated smoke;
 - OpenHuman app-session detection cannot be made reliable enough to report.
 
 ## Progress Log Format

@@ -10,6 +10,7 @@ close to the existing GonkaGate setup tools.
 - the CLI must not accept a plain `--api-key` flag
 - support safe inputs only: hidden prompt, `GONKAGATE_API_KEY`, and
   `--api-key-stdin`
+- use the key to fetch the live GonkaGate `/v1/models` catalog with Bearer auth
 - preserve unrelated OpenHuman configuration
 - create backups before managed rewrites
 - redact secret-bearing diagnostics and error messages

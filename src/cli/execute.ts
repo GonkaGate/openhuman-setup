@@ -1,3 +1,4 @@
+import { select } from "@inquirer/prompts";
 import { CONTRACT_METADATA } from "../constants/contract.js";
 import {
   GONKAGATE_AUTH_STYLE,
@@ -9,8 +10,10 @@ import {
   GONKAGATE_PROVIDER_NAME,
 } from "../constants/gateway.js";
 import {
+  fetchGonkaGateModels,
+  getDefaultGonkaGateModel,
   resolveOpenHumanWorkloadProviders,
-  getRecommendedValidatedModel,
+  type GonkaGateModel,
 } from "../constants/models.js";
 import {
   credentialOutcome,
@@ -30,28 +33,42 @@ import type { CliOptions, CliResult } from "./contracts.js";
 export interface CliRuntime extends SecretRuntime {
   fetch?: typeof fetch;
   now?: () => Date;
+  promptModel?: (models: readonly GonkaGateModel[]) => Promise<string>;
 }
 
 export async function executeCli(
   options: CliOptions,
   runtime: CliRuntime = {},
 ): Promise<CliResult> {
-  const model = getRecommendedValidatedModel(options.modelKey);
+  const apiKey = await collectApiKey(options, runtime);
+  if (apiKey === undefined) {
+    throw new Error(
+      "GonkaGate API key is required to fetch available models; use hidden prompt, GONKAGATE_API_KEY, or --api-key-stdin",
+    );
+  }
+
+  const liveModels = await fetchGonkaGateModels(apiKey.value, runtime.fetch);
+  const globalModelKey = await collectGlobalModelKey(
+    options,
+    runtime,
+    liveModels,
+  );
+  const model = getDefaultGonkaGateModel(liveModels, globalModelKey);
   const workloadProviders = resolveOpenHumanWorkloadProviders(
     omitUndefined({
       agenticModelKey: options.agenticModelKey,
       codingModelKey: options.codingModelKey,
-      globalModelKey: options.modelKey,
+      globalModelKey,
       reasoningModelKey: options.reasoningModelKey,
       summarizationModelKey: options.summarizationModelKey,
     }),
+    liveModels,
   );
   const discovery = await discoverOpenHumanConfig(
     runtime.env === undefined ? {} : { env: runtime.env },
   );
   const existingConfig = await readConfigIfExists(discovery.configPath);
   const mergedConfig = mergeGonkaGateConfig(existingConfig, workloadProviders);
-  const apiKey = await collectApiKey(options, runtime);
   const config = await writeConfigAtomically(
     discovery.configPath,
     mergedConfig,
@@ -67,9 +84,9 @@ export async function executeCli(
   );
   const reasoningModel =
     workloadProviders.find((provider) => provider.workload === "reasoning")
-      ?.model ?? model.modelId;
+      ?.model ?? model.id;
   const gonkaGateSmoke = await runGonkaGateSmoke(
-    apiKey?.value,
+    apiKey.value,
     reasoningModel,
     runtime.fetch,
   );
@@ -112,7 +129,7 @@ export async function executeCli(
           profile: GONKAGATE_CREDENTIAL_PROFILE,
           providerKey: GONKAGATE_CREDENTIAL_PROVIDER_KEY,
         },
-        defaultModel: model.modelId,
+        defaultModel: model.id,
         workloadProviders: workloadProviders.map((provider) => ({
           ...provider,
         })),
@@ -128,6 +145,45 @@ export async function executeCli(
     },
     warnings: buildWarnings(credentials, openhumanSession.status),
   };
+}
+
+async function collectGlobalModelKey(
+  options: CliOptions,
+  runtime: CliRuntime,
+  models: readonly GonkaGateModel[],
+): Promise<string | undefined> {
+  if (options.modelKey !== undefined || hasWorkloadOverride(options)) {
+    return options.modelKey;
+  }
+
+  const canPrompt =
+    !options.yes &&
+    !options.json &&
+    (runtime.isInteractive ?? (process.stdin.isTTY && process.stdout.isTTY));
+  if (!canPrompt) {
+    return undefined;
+  }
+
+  if (runtime.promptModel !== undefined) {
+    return runtime.promptModel(models);
+  }
+
+  return select({
+    choices: models.map((model) => ({
+      name: model.name === undefined ? model.id : `${model.name} (${model.id})`,
+      value: model.id,
+    })),
+    message: "GonkaGate model",
+  });
+}
+
+function hasWorkloadOverride(options: CliOptions): boolean {
+  return (
+    options.agenticModelKey !== undefined ||
+    options.codingModelKey !== undefined ||
+    options.reasoningModelKey !== undefined ||
+    options.summarizationModelKey !== undefined
+  );
 }
 
 function buildWarnings(

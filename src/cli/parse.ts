@@ -1,6 +1,5 @@
 import { Command, Option } from "commander";
 import { CONTRACT_METADATA } from "../constants/contract.js";
-import { getValidatedModelKeys } from "../constants/models.js";
 import type { CliOptions } from "./contracts.js";
 
 export function parseCliArgs(argv: readonly string[]): CliOptions {
@@ -20,34 +19,30 @@ export function parseCliArgs(argv: readonly string[]): CliOptions {
     .option("--api-key-stdin", "read the GonkaGate API key from stdin")
     .option("--json", "render machine-readable JSON output")
     .option("--yes", "accept safe defaults for non-interactive setup")
+    .addOption(new Option("--model <id>", "GonkaGate model id from /v1/models"))
     .addOption(
-      new Option("--model <key>", "curated GonkaGate model key").choices(
-        getValidatedModelKeys(),
+      new Option(
+        "--reasoning-model <id>",
+        "GonkaGate model id for OpenHuman reasoning workloads",
       ),
     )
     .addOption(
       new Option(
-        "--reasoning-model <key>",
-        "curated model key for OpenHuman reasoning workloads",
-      ).choices(getValidatedModelKeys()),
+        "--agentic-model <id>",
+        "GonkaGate model id for OpenHuman agentic workloads",
+      ),
     )
     .addOption(
       new Option(
-        "--agentic-model <key>",
-        "curated model key for OpenHuman agentic workloads",
-      ).choices(getValidatedModelKeys()),
+        "--coding-model <id>",
+        "GonkaGate model id for OpenHuman coding workloads",
+      ),
     )
     .addOption(
       new Option(
-        "--coding-model <key>",
-        "curated model key for OpenHuman coding workloads",
-      ).choices(getValidatedModelKeys()),
-    )
-    .addOption(
-      new Option(
-        "--summarization-model <key>",
-        "curated model key for OpenHuman summarization workloads",
-      ).choices(getValidatedModelKeys()),
+        "--summarization-model <id>",
+        "GonkaGate model id for OpenHuman summarization workloads",
+      ),
     );
 
   command.parse(argv, { from: "node" });
